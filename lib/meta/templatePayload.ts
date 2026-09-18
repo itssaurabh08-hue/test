@@ -65,6 +65,11 @@ function buttonNeedsParameter(button: MetaTemplateButtonWithIndex): boolean {
   return button.type === "URL" && Boolean(button.url && new RegExp(VARIABLE_PATTERN).test(button.url));
 }
 
+/** Buttons that require a dynamic parameter to be supplied when sending. */
+export function getButtonsRequiringParameters(template: MetaTemplate): MetaTemplateButtonWithIndex[] {
+  return getButtonComponents(template).filter(buttonNeedsParameter);
+}
+
 export class TemplatePayloadError extends Error {}
 
 /**
