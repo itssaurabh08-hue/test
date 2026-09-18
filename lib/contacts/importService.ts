@@ -51,8 +51,18 @@ export async function commitImportedContacts(
   const updated = importable.filter((r) => existingPhones.has(r.normalizedPhone!)).length;
   const created = importable.length - updated;
 
+  // A phone that opted out (via inbound "STOP" etc.) before ever having a
+  // Contact row must still come in pre-suppressed — otherwise re-importing
+  // the same spreadsheet later would silently resurrect them.
+  const suppressed = await prisma.suppression.findMany({
+    where: { phone: { in: importable.map((r) => r.normalizedPhone!) } },
+    select: { phone: true },
+  });
+  const suppressedPhones = new Set(suppressed.map((s) => s.phone));
+
   await mapWithConcurrency(importable, 10, async (row) => {
     const metadata = row.raw as Prisma.InputJsonValue;
+    const isPreSuppressed = suppressedPhones.has(row.normalizedPhone!);
     await prisma.contact.upsert({
       where: { phone: row.normalizedPhone! },
       create: {
@@ -62,14 +72,16 @@ export async function commitImportedContacts(
         email: row.email,
         source,
         metadata,
+        optedOut: isPreSuppressed,
+        optedOutAt: isPreSuppressed ? new Date() : null,
       },
       update: {
         name: row.name,
         email: row.email,
         source,
         metadata,
-        // optedOut / optedOutAt intentionally omitted: re-importing a
-        // contact must never silently re-subscribe them.
+        // optedOut / optedOutAt intentionally omitted on update: re-
+        // importing a contact must never silently re-subscribe them.
       },
     });
   });
