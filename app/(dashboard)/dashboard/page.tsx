@@ -1,10 +1,24 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { StatusDistributionChart } from "@/components/charts/status-distribution-chart";
+import { RecentCampaignsChart } from "@/components/charts/recent-campaigns-chart";
 
-function rate(numerator: number, denominator: number): string {
+function pct(numerator: number, denominator: number): string {
   if (denominator === 0) return "0%";
   return `${((numerator / denominator) * 100).toFixed(1)}%`;
 }
+
+const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "destructive" | "warning" | "outline"> = {
+  DRAFT: "outline",
+  QUEUED: "secondary",
+  RUNNING: "default",
+  PAUSED: "warning",
+  COMPLETED: "success",
+  CANCELLED: "outline",
+  FAILED: "destructive",
+};
 
 export default async function DashboardPage() {
   const [totalCampaigns, aggregates, recentCampaigns] = await Promise.all([
@@ -14,7 +28,7 @@ export default async function DashboardPage() {
     }),
     prisma.campaign.findMany({
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 8,
       select: {
         id: true,
         name: true,
@@ -33,13 +47,17 @@ export default async function DashboardPage() {
   const delivered = aggregates._sum.delivered ?? 0;
   const read = aggregates._sum.read ?? 0;
   const failed = aggregates._sum.failed ?? 0;
+  // "Sent" counts messages currently sitting in the SENT bucket (not yet
+  // delivered/read/failed); the denominator for rates is everything Meta
+  // has ever accepted a delivery/read/fail outcome for.
+  const totalProcessed = sent + delivered + read + failed;
 
-  const stats = [
+  const kpis = [
     { label: "Total campaigns", value: totalCampaigns },
-    { label: "Messages sent", value: sent },
-    { label: "Delivered", value: delivered, sub: rate(delivered, sent) + " delivery rate" },
-    { label: "Read", value: read, sub: rate(read, delivered) + " read rate" },
-    { label: "Failed", value: failed, sub: rate(failed, sent) + " failure rate" },
+    { label: "Messages sent", value: totalProcessed },
+    { label: "Delivery rate", value: pct(delivered + read, totalProcessed), isRate: true },
+    { label: "Read rate", value: pct(read, totalProcessed), isRate: true },
+    { label: "Failure rate", value: pct(failed, totalProcessed), isRate: true },
   ];
 
   return (
@@ -52,19 +70,42 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        {stats.map((s) => (
-          <Card key={s.label}>
+        {kpis.map((k) => (
+          <Card key={k.label}>
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-medium text-muted-foreground">
-                {s.label}
+                {k.label}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-semibold">{s.value.toLocaleString()}</p>
-              {s.sub ? <p className="text-xs text-muted-foreground">{s.sub}</p> : null}
+              <p className="text-2xl font-semibold">
+                {typeof k.value === "number" ? k.value.toLocaleString() : k.value}
+              </p>
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Messages by status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <StatusDistributionChart data={{ sent, delivered, read, failed }} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Messages sent — recent campaigns</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RecentCampaignsChart
+              data={recentCampaigns.map((c) => ({ name: c.name, sent: c.sent + c.delivered + c.read + c.failed }))}
+            />
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -79,18 +120,23 @@ export default async function DashboardPage() {
           ) : (
             <div className="flex flex-col divide-y divide-border">
               {recentCampaigns.map((c) => (
-                <div key={c.id} className="flex items-center justify-between py-3 text-sm">
+                <Link
+                  key={c.id}
+                  href={`/campaigns/${c.id}`}
+                  className="flex items-center justify-between py-3 text-sm hover:bg-accent/30"
+                >
                   <div>
                     <p className="font-medium">{c.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {c.status} · {c.totalContacts} recipients
+                      <Badge variant={STATUS_VARIANT[c.status] ?? "outline"}>{c.status}</Badge>{" "}
+                      {c.totalContacts} recipients
                     </p>
                   </div>
                   <div className="text-right text-xs text-muted-foreground">
-                    <p>{c.sent} sent</p>
-                    <p>{c.delivered} delivered</p>
+                    <p>{c.delivered + c.read} delivered</p>
+                    <p>{c.failed} failed</p>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
