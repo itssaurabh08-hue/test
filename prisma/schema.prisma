@@ -1,0 +1,278 @@
+// Prisma schema for the WhatsApp Bulk Messaging Platform (Meta Cloud API only).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum CampaignStatus {
+  DRAFT
+  QUEUED
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum RecipientStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  CANCELLED
+}
+
+enum ErrorCategory {
+  TRANSIENT
+  PERMANENT
+  UNKNOWN
+}
+
+enum SuppressionSource {
+  INBOUND_KEYWORD
+  MANUAL
+  IMPORT
+}
+
+// ---------- Auth ----------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(MEMBER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  campaigns  Campaign[]
+  auditLogs  AuditLog[]
+  suppressed Suppression[] @relation("SuppressionCreatedBy")
+
+  @@index([email])
+}
+
+// ---------- Contacts ----------
+
+model Contact {
+  id          String    @id @default(cuid())
+  name        String
+  phone       String // E.164 normalised, e.g. +919876543210
+  countryCode String // e.g. "IN"
+  email       String?
+  source      String // e.g. "csv-import:filename.csv", "manual"
+  metadata    Json      @default("{}") // arbitrary preserved spreadsheet columns
+  optedOut    Boolean   @default(false)
+  optedOutAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  recipients CampaignRecipient[]
+
+  @@unique([phone])
+  @@index([phone])
+  @@index([optedOut])
+  @@index([createdAt])
+}
+
+// ---------- Templates (mirrored from Meta WABA) ----------
+
+model Template {
+  id              String   @id @default(cuid())
+  metaTemplateId  String? // id returned by Meta Graph API
+  name            String
+  language        String // e.g. "en_US"
+  category        String // MARKETING | UTILITY | AUTHENTICATION (per Meta)
+  status          String // APPROVED | PENDING | REJECTED | PAUSED | DISABLED (per Meta)
+  components      Json // raw components array from Meta (header/body/footer/buttons)
+  lastSyncedAt    DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([name, language])
+  @@index([status])
+}
+
+// ---------- Campaigns ----------
+
+model Campaign {
+  id               String         @id @default(cuid())
+  name             String
+  templateName     String
+  templateLanguage String
+  templateCategory String?
+  status           CampaignStatus @default(DRAFT)
+
+  variableMapping Json @default("{}") // { "1": {"source": "column", "value": "Name"}, ... } plus header/button mappings
+  selectionFilter Json @default("{}") // snapshot of how recipients were selected (all / specific ids / filters)
+
+  totalContacts Int @default(0)
+  queued        Int @default(0)
+  sent          Int @default(0)
+  delivered     Int @default(0)
+  read          Int @default(0)
+  failed        Int @default(0)
+  cancelled     Int @default(0)
+
+  estimatedCostAmount   Decimal? @db.Decimal(12, 4)
+  estimatedCostCurrency String?
+
+  confirmedAt DateTime?
+
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  recipients CampaignRecipient[]
+  messages   Message[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CampaignRecipient {
+  id         String @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId  String
+  contact    Contact  @relation(fields: [contactId], references: [id])
+
+  phone     String // snapshot of the contact's phone at campaign time
+  variables Json   @default("{}") // resolved template variables for this recipient
+
+  status        RecipientStatus @default(PENDING)
+  metaMessageId String?
+  errorCode     String?
+  errorMessage  String?
+  errorCategory ErrorCategory?
+  retryCount    Int             @default(0)
+
+  queuedAt    DateTime?
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  failedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([metaMessageId])
+  @@index([contactId])
+}
+
+// One row per send attempt (supports retries independently of the recipient's current state).
+model Message {
+  id                  String   @id @default(cuid())
+  campaignId          String
+  campaign            Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignRecipientId String
+  campaignRecipient   CampaignRecipient @relation(fields: [campaignRecipientId], references: [id], onDelete: Cascade)
+
+  attempt       Int             @default(1)
+  phone         String
+  templateName  String
+  status        RecipientStatus @default(QUEUED)
+  metaMessageId String?
+
+  requestPayload Json? // outbound payload sent to Meta (no credentials)
+  responseRaw    Json? // raw Meta API response (success or error)
+
+  errorCode     String?
+  errorType     String?
+  errorMessage  String?
+  errorCategory ErrorCategory?
+
+  queuedAt    DateTime?
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  failedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([metaMessageId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ---------- Suppression / opt-out ----------
+
+model Suppression {
+  id          String            @id @default(cuid())
+  phone       String            @unique
+  reason      String?
+  source      SuppressionSource @default(MANUAL)
+  createdById String?
+  createdBy   User?             @relation("SuppressionCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime          @default(now())
+  removedAt   DateTime?
+  removedById String?
+
+  @@index([phone])
+}
+
+// ---------- Webhook idempotency ----------
+
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  dedupeKey  String   @unique // e.g. `${metaMessageId}:${status}:${timestamp}`
+  payload    Json
+  processedAt DateTime @default(now())
+
+  @@index([dedupeKey])
+}
+
+// ---------- Pricing (for estimated cost only, not an official invoice) ----------
+
+model PricingRate {
+  id        String   @id @default(cuid())
+  country   String // ISO country code, e.g. "IN"
+  category  String // MARKETING | UTILITY | AUTHENTICATION | SERVICE
+  price     Decimal  @db.Decimal(12, 4)
+  currency  String   @default("USD")
+  updatedAt DateTime @updatedAt
+
+  @@unique([country, category])
+}
+
+// ---------- Audit log ----------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String // e.g. CAMPAIGN_CREATED, MESSAGE_SENT
+  resource   String // e.g. "Campaign", "Contact"
+  resourceId String?
+  metadata   Json     @default("{}")
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceId])
+  @@index([createdAt])
+}
