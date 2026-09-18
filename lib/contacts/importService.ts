@@ -55,7 +55,7 @@ export async function commitImportedContacts(
   // Contact row must still come in pre-suppressed — otherwise re-importing
   // the same spreadsheet later would silently resurrect them.
   const suppressed = await prisma.suppression.findMany({
-    where: { phone: { in: importable.map((r) => r.normalizedPhone!) } },
+    where: { phone: { in: importable.map((r) => r.normalizedPhone!) }, removedAt: null },
     select: { phone: true },
   });
   const suppressedPhones = new Set(suppressed.map((s) => s.phone));

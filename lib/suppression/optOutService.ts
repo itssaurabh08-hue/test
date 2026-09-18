@@ -28,7 +28,9 @@ export async function processInboundMessagesForOptOut(
 
     await prisma.suppression.upsert({
       where: { phone },
-      update: {},
+      // Re-suppress and clear any prior removal — a contact who opts out
+      // again after being manually un-suppressed must not stay eligible.
+      update: { removedAt: null, removedById: null },
       create: {
         phone,
         source: "INBOUND_KEYWORD",

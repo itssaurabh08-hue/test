@@ -25,7 +25,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/contacts/[i
     }),
     prisma.suppression.upsert({
       where: { phone: contact.phone },
-      update: {},
+      update: { removedAt: null, removedById: null },
       create: {
         phone: contact.phone,
         source: "MANUAL",
