@@ -1,4 +1,4 @@
-import "server-only";
+// No `server-only` guard — see the comment in lib/db/prisma.ts.
 import { getEnv } from "@/lib/env";
 import {
   classifyMetaErrorCode,

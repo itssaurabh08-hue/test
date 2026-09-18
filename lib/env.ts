@@ -1,4 +1,5 @@
-import "server-only";
+// No `server-only` guard — see the comment in lib/db/prisma.ts. This
+// module is also imported by the standalone worker process.
 import { z } from "zod";
 
 // Single source of truth for server-side environment configuration.

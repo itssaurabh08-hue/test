@@ -22,6 +22,10 @@ export default async function CampaignDetailPage({
   const campaign = await prisma.campaign.findUnique({ where: { id } });
   if (!campaign) notFound();
 
+  const retryableFailedCount = await prisma.campaignRecipient.count({
+    where: { campaignId: id, status: "FAILED", errorCategory: "TRANSIENT" },
+  });
+
   const processed = campaign.sent + campaign.delivered + campaign.read + campaign.failed + campaign.cancelled;
   const progressPct = campaign.totalContacts > 0 ? Math.round((processed / campaign.totalContacts) * 100) : 0;
 
@@ -38,7 +42,11 @@ export default async function CampaignDetailPage({
             {campaign.createdAt.toLocaleString()}
           </p>
         </div>
-        <CampaignControls campaignId={campaign.id} status={campaign.status} />
+        <CampaignControls
+          campaignId={campaign.id}
+          status={campaign.status}
+          hasFailedRetryable={retryableFailedCount > 0}
+        />
       </div>
 
       <Card>

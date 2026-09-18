@@ -1,4 +1,4 @@
-import "server-only";
+// No `server-only` guard — see the comment in lib/db/prisma.ts.
 import { metaGraphRequest, getWabaId } from "@/lib/meta/metaClient";
 import { isMockMode } from "@/lib/env";
 

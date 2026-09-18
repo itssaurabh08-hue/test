@@ -1,4 +1,4 @@
-import "server-only";
+// No `server-only` guard — see the comment in lib/db/prisma.ts.
 import { randomUUID } from "node:crypto";
 import { metaGraphRequest, getPhoneNumberId, MetaApiError } from "@/lib/meta/metaClient";
 import { isMockMode } from "@/lib/env";

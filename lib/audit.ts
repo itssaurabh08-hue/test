@@ -1,4 +1,4 @@
-import "server-only";
+// No `server-only` guard — see the comment in lib/db/prisma.ts.
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 
