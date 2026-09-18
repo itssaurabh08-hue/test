@@ -50,9 +50,15 @@ export default async function SettingsPage() {
           <p className="text-xs text-muted-foreground">
             Credentials are set via environment variables and never exposed to the browser.
             See <Link className="underline" href="/settings/pricing">pricing</Link> to configure
-            estimated cost rates, and{" "}
+            estimated cost rates,{" "}
             <Link className="underline" href="/settings/suppression">suppression list</Link> to
-            manage opted-out contacts.
+            manage opted-out contacts, and{" "}
+            {session.role === "ADMIN" ? (
+              <Link className="underline" href="/settings/audit-log">audit log</Link>
+            ) : (
+              "audit log (admin only)"
+            )}{" "}
+            to review recent account activity.
           </p>
         </CardContent>
       </Card>

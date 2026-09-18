@@ -8,6 +8,7 @@ import { verifyPassword } from "@/lib/auth/password";
 import { createSession, destroySession } from "@/lib/auth/session";
 import { verifySession } from "@/lib/auth/dal";
 import { writeAuditLog, ipFromHeaders } from "@/lib/audit";
+import { isLoginRateLimited, recordFailedLogin, clearLoginAttempts } from "@/lib/auth/loginRateLimit";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -32,8 +33,19 @@ export async function login(
   const { email, password } = parsed.data;
   const ip = ipFromHeaders(await headers());
 
+  if (await isLoginRateLimited(email)) {
+    await writeAuditLog({
+      action: "USER_LOGIN_FAILED",
+      resource: "User",
+      metadata: { email, reason: "rate_limited" },
+      ipAddress: ip,
+    });
+    return { error: "Too many failed attempts. Try again in a few minutes." };
+  }
+
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
+    await recordFailedLogin(email);
     await writeAuditLog({
       action: "USER_LOGIN_FAILED",
       resource: "User",
@@ -45,6 +57,7 @@ export async function login(
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
+    await recordFailedLogin(email);
     await writeAuditLog({
       userId: user.id,
       action: "USER_LOGIN_FAILED",
@@ -55,6 +68,7 @@ export async function login(
     return { error: "Invalid email or password." };
   }
 
+  await clearLoginAttempts(email);
   await createSession({
     userId: user.id,
     email: user.email,

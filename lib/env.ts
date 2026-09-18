@@ -34,7 +34,7 @@ const envSchema = z.object({
   META_APP_ID: z.string().optional().default(""),
   META_APP_SECRET: z.string().optional().default(""),
   META_VERIFY_TOKEN: z.string().optional().default(""),
-  META_GRAPH_API_VERSION: z.string().min(2).default("v23.0"),
+  META_GRAPH_API_VERSION: z.string().min(2).default("v26.0"),
 
   WHATSAPP_MOCK_MODE: boolFromString,
 
