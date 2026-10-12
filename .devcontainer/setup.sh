@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Runs once, when the Codespace/devcontainer is first created.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "==> Enabling pnpm"
+corepack enable 2>/dev/null || sudo corepack enable
+
+echo "==> Installing dependencies"
+pnpm install
+
+echo "==> Creating .env (if it doesn't exist yet)"
+if [ ! -f .env ]; then
+  cp .env.example .env
+  # Generate a real random session secret instead of the placeholder.
+  SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+  sed -i "s#^NEXTAUTH_SECRET=.*#NEXTAUTH_SECRET=\"$SECRET\"#" .env
+fi
+
+echo "==> Starting Postgres + Redis"
+docker compose up -d postgres redis
+
+echo "==> Waiting for Postgres to accept connections"
+for i in $(seq 1 30); do
+  if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+echo "==> Applying database migrations"
+pnpm db:migrate:deploy
+
+echo "==> Seeding the database (admin user + default pricing)"
+pnpm db:seed || echo "(seed skipped — already seeded, or check ADMIN_EMAIL/ADMIN_PASSWORD in .env)"
+
+echo "==> Setup complete. The app and worker will start automatically."

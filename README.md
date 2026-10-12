@@ -79,7 +79,20 @@ unofficial-API fallback anywhere in this codebase.
 
 ## Local installation
 
-### Prerequisites
+### Option: GitHub Codespaces (no local setup, no terminal typing required)
+
+This repo includes a `.devcontainer/` config. Open it as a Codespace
+(**Code → Codespaces → Create codespace on this branch** on GitHub), and
+it automatically installs dependencies, starts Postgres/Redis, runs
+migrations, seeds an admin user, and starts both the app and the worker.
+Once it's up, Codespaces will prompt you to open port 3000 in your
+browser (or use the **Ports** tab next to the Terminal panel). Login is
+whatever `ADMIN_EMAIL`/`ADMIN_PASSWORD` ends up in the generated `.env`
+(defaults to `admin@example.com` / `change-me-immediately` — change this
+if the Codespace is ever made public). This is the easiest way to look at
+the app without installing anything.
+
+### Prerequisites (for running it yourself, outside Codespaces)
 
 - **Node.js 22.x** (see `.nvmrc`; developed and tested against 22.22).
 - **pnpm 10.x** (`corepack enable`, or `npm i -g pnpm`).
