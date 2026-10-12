@@ -15,6 +15,13 @@ if [ ! -f .env ]; then
   # Generate a real random session secret instead of the placeholder.
   SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
   sed -i "s#^NEXTAUTH_SECRET=.*#NEXTAUTH_SECRET=\"$SECRET\"#" .env
+  # Skip the login page for this preview Codespace. Codespaces ports
+  # default to "Private" (only you, signed into GitHub, can open the
+  # forwarded URL), which is what makes this safe here — do NOT copy
+  # this setting anywhere with a public URL. If you ever make this
+  # Codespace's port Public, set DISABLE_AUTH back to "false" in .env
+  # and restart `pnpm dev`.
+  sed -i 's#^DISABLE_AUTH=.*#DISABLE_AUTH="true"#' .env
 fi
 
 echo "==> Starting Postgres + Redis"

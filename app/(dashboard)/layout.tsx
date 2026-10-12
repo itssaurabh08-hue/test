@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth/dal";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { MockModeBanner } from "@/components/mock-mode-banner";
+import { AuthDisabledBanner } from "@/components/auth-disabled-banner";
 import { LogoutButton } from "@/components/logout-button";
 
 export default async function DashboardLayout({
@@ -12,6 +13,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
+      <AuthDisabledBanner />
       <MockModeBanner />
       <div className="flex flex-1">
         <aside className="hidden w-56 shrink-0 border-r border-border md:flex md:flex-col">

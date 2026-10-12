@@ -20,7 +20,12 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const hasSessionCookie = Boolean(request.cookies.get("session")?.value);
+  // DEV-ONLY: see the matching bypass in lib/auth/dal.ts. Treat every
+  // request as already authenticated; never set this anywhere but a
+  // private, single-person preview.
+  const authDisabled = process.env.DISABLE_AUTH === "true";
+
+  const hasSessionCookie = authDisabled || Boolean(request.cookies.get("session")?.value);
   const isPublicPath = PUBLIC_PATHS.includes(pathname);
   const isApiAuthPath = pathname.startsWith("/api/auth");
 

@@ -86,11 +86,15 @@ This repo includes a `.devcontainer/` config. Open it as a Codespace
 it automatically installs dependencies, starts Postgres/Redis, runs
 migrations, seeds an admin user, and starts both the app and the worker.
 Once it's up, Codespaces will prompt you to open port 3000 in your
-browser (or use the **Ports** tab next to the Terminal panel). Login is
-whatever `ADMIN_EMAIL`/`ADMIN_PASSWORD` ends up in the generated `.env`
-(defaults to `admin@example.com` / `change-me-immediately` — change this
-if the Codespace is ever made public). This is the easiest way to look at
-the app without installing anything.
+browser (or use the **Ports** tab next to the Terminal panel). This is
+the easiest way to look at the app without installing anything.
+
+The generated `.env` also sets `DISABLE_AUTH="true"` so there's no login
+screen to deal with while previewing — this relies on Codespaces ports
+defaulting to **Private** (only you, signed into GitHub, can open the
+forwarded URL). **If you ever change that port's visibility to Public,
+set `DISABLE_AUTH="false"` in `.env` and restart `pnpm dev` first** — see
+the "Known dev-only bypasses" note below.
 
 ### Prerequisites (for running it yourself, outside Codespaces)
 
@@ -274,7 +278,26 @@ two long-running processes (e.g. under `pm2` or `systemd`).
 - Every dashboard page, server action, and API route requires an
   authenticated session, checked in `lib/auth/dal.ts` (with an
   optimistic redirect in `proxy.ts` for UX only — the real check is
-  always server-side and re-run per request).
+  always server-side and re-run per request) — **except** when
+  `DISABLE_AUTH=true` (see "Known dev-only bypasses" below).
+
+### Known dev-only bypasses — never enable outside a private preview
+
+Two environment flags intentionally weaken the app for local/demo use.
+Both default to safe values, both are loud about it in the UI (a
+permanent banner), and neither should ever be set on a deployment anyone
+but you can reach:
+
+| Flag | What it does | Why it exists |
+|---|---|---|
+| `WHATSAPP_MOCK_MODE` | Simulates every send instead of calling Meta | Develop/test the whole flow without a live WABA |
+| `DISABLE_AUTH` | Skips the login page; every request is treated as the first ADMIN user | Let a non-technical reviewer preview the app in their own private GitHub Codespace without a login step |
+
+`DISABLE_AUTH` is set automatically in the Codespaces devcontainer
+(`.devcontainer/setup.sh`) on the assumption that Codespaces ports default
+to **Private**. If that port's visibility is ever changed to Public, or
+you deploy this anywhere with a reachable URL, set `DISABLE_AUTH="false"`
+first.
 - Meta credentials, database credentials, and Redis credentials are
   server-only environment variables, validated centrally in `lib/env.ts`,
   and are never bundled into client-side JavaScript.

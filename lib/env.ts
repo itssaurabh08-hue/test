@@ -37,6 +37,7 @@ const envSchema = z.object({
   META_GRAPH_API_VERSION: z.string().min(2).default("v26.0"),
 
   WHATSAPP_MOCK_MODE: boolFromString,
+  DISABLE_AUTH: boolFromString,
 
   MAX_MESSAGES_PER_SECOND: intFromString(10),
   MAX_CONCURRENT_JOBS: intFromString(5),
@@ -66,4 +67,9 @@ export function getEnv(): ServerEnv {
 /** True when the app must not call the real Meta API. Always shown in the UI. */
 export function isMockMode(): boolean {
   return getEnv().WHATSAPP_MOCK_MODE;
+}
+
+/** DEV-ONLY: true when login is bypassed entirely. Always shown in the UI. */
+export function isAuthDisabled(): boolean {
+  return getEnv().DISABLE_AUTH;
 }
